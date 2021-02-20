@@ -131,7 +131,7 @@
 #define CITUS_EXTENSION_NAME "citus"
 
 /* Default external service provider to use to discover local IP address */
-#define DEFAULT_INTERFACE_LOOKUP_SERVICE_NAME "8.8.8.8"
+#define DEFAULT_INTERFACE_LOOKUP_SERVICE_NAME "127.0.0.11"
 #define DEFAULT_INTERFACE_LOOKUP_SERVICE_PORT 53
 
 /*
