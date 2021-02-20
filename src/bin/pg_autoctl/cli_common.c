@@ -826,7 +826,7 @@ cli_getopt_pgdata(int argc, char **argv)
 	 */
 	unsetenv("POSIXLY_CORRECT");
 
-	while ((c = getopt_long(argc, argv, "D:JVvqh",
+	while ((c = getopt_long(argc, argv, "+D:JVvqh",
 							long_options, &option_index)) != -1)
 	{
 		switch (c)
@@ -1201,7 +1201,7 @@ cli_print_version_getopts(int argc, char **argv)
 	 */
 	unsetenv("POSIXLY_CORRECT");
 
-	while ((c = getopt_long(argc, argv, "JVvqh",
+	while ((c = getopt_long(argc, argv, "+JVvqh",
 							long_options, &option_index)) != -1)
 	{
 		switch (c)
@@ -1708,7 +1708,7 @@ cli_node_metadata_getopts(int argc, char **argv)
 
 	optind = 0;
 
-	while ((c = getopt_long(argc, argv, "D:n:H:p:JVvqh",
+	while ((c = getopt_long(argc, argv, "+D:n:H:p:JVvqh",
 							long_options, &option_index)) != -1)
 	{
 		switch (c)
@@ -1878,7 +1878,7 @@ cli_get_name_getopts(int argc, char **argv)
 	 */
 	unsetenv("POSIXLY_CORRECT");
 
-	while ((c = getopt_long(argc, argv, "D:f:g:n:Vvqh",
+	while ((c = getopt_long(argc, argv, "+D:f:g:n:Vvqh",
 							long_options, &option_index)) != -1)
 	{
 		switch (c)

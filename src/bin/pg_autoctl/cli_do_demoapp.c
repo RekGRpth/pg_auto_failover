@@ -153,7 +153,7 @@ cli_do_demoapp_getopts(int argc, char **argv)
 	 */
 	unsetenv("POSIXLY_CORRECT");
 
-	while ((c = getopt_long(argc, argv, "D:p:Vvqh",
+	while ((c = getopt_long(argc, argv, "+D:p:Vvqh",
 							long_options, &option_index)) != -1)
 	{
 		switch (c)

@@ -145,7 +145,7 @@ cli_secondary_getopts(int argc, char **argv)
 
 	optind = 0;
 
-	while ((c = getopt_long(argc, argv, "D:f:Vvqh",
+	while ((c = getopt_long(argc, argv, "+D:f:Vvqh",
 							long_options, &option_index)) != -1)
 	{
 		switch (c)
@@ -332,7 +332,7 @@ cli_maintenance_getopts(int argc, char **argv)
 
 	optind = 0;
 
-	while ((c = getopt_long(argc, argv, "D:f:AVvqh",
+	while ((c = getopt_long(argc, argv, "+D:f:AVvqh",
 							long_options, &option_index)) != -1)
 	{
 		switch (c)
@@ -671,7 +671,7 @@ cli_ssl_getopts(int argc, char **argv)
 
 	optind = 0;
 
-	while ((c = getopt_long(argc, argv, "D:VvqhNs",
+	while ((c = getopt_long(argc, argv, "+D:VvqhNs",
 							long_options, &option_index)) != -1)
 	{
 		switch (c)

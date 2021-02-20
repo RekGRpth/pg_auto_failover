@@ -157,7 +157,7 @@ root_options(int argc, char **argv)
 
 	optind = 0;
 
-	while ((c = getopt_long(argc, argv, "JVvqh",
+	while ((c = getopt_long(argc, argv, "+JVvqh",
 							long_options, &option_index)) != -1)
 	{
 		switch (c)
