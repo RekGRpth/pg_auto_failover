@@ -1310,6 +1310,7 @@ keeper_register_and_init(Keeper *keeper, NodeState initialState)
 								  config->pgSetup.pgKind,
 								  config->pgSetup.settings.candidatePriority,
 								  config->pgSetup.settings.replicationQuorum,
+								  config->pgSetup.citusClusterName,
 								  &mayRetry,
 								  &assignedState))
 		{
@@ -1439,7 +1440,7 @@ rollback:
  * local state file.
  */
 bool
-keeper_remove(Keeper *keeper, KeeperConfig *config, bool ignore_monitor_errors)
+keeper_remove(Keeper *keeper, KeeperConfig *config)
 {
 	int errors = 0;
 
@@ -1473,13 +1474,8 @@ keeper_remove(Keeper *keeper, KeeperConfig *config, bool ignore_monitor_errors)
 							config->hostname,
 							config->pgSetup.pgport))
 		{
-			/* we already logged about errors */
-			errors++;
-
-			if (!ignore_monitor_errors)
-			{
-				return false;
-			}
+			/* errors have already been logged */
+			return false;
 		}
 	}
 
@@ -1571,7 +1567,7 @@ keeper_update_group_hba(Keeper *keeper, NodeAddressArray *diffNodesArray)
 									   postgresSetup->dbname,
 									   PG_AUTOCTL_REPLICA_USERNAME,
 									   authMethod,
-									   postgresSetup->hbaLevel))
+									   keeper->config.pgSetup.hbaLevel))
 	{
 		log_error("Failed to edit HBA file \"%s\" to update rules to current "
 				  "list of nodes registered on the monitor",
@@ -1584,7 +1580,7 @@ keeper_update_group_hba(Keeper *keeper, NodeAddressArray *diffNodesArray)
 	 * edited the HBA and it's going to take effect at next restart of
 	 * Postgres, so we're good here.
 	 */
-	if (postgresSetup->hbaLevel > HBA_EDIT_SKIP &&
+	if (keeper->config.pgSetup.hbaLevel >= HBA_EDIT_MINIMAL &&
 		pg_setup_is_running(postgresSetup))
 	{
 		if (!pgsql_reload_conf(pgsql))
