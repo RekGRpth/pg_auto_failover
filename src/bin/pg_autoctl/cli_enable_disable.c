@@ -1275,7 +1275,7 @@ cli_enable_monitor_getopts(int argc, char **argv)
 	 */
 	unsetenv("POSIXLY_CORRECT");
 
-	while ((c = getopt_long(argc, argv, "D:m:AVvqh",
+	while ((c = getopt_long(argc, argv, "+D:m:AVvqh",
 							long_options, &option_index)) != -1)
 	{
 		switch (c)
@@ -1512,7 +1512,7 @@ cli_disable_monitor_getopts(int argc, char **argv)
 
 	optind = 0;
 
-	while ((c = getopt_long(argc, argv, "D:FVvqh",
+	while ((c = getopt_long(argc, argv, "+D:FVvqh",
 							long_options, &option_index)) != -1)
 	{
 		switch (c)
