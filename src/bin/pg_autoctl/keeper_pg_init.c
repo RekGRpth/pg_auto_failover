@@ -27,6 +27,7 @@
 #include "pgsetup.h"
 #include "pgsql.h"
 #include "service_keeper_init.h"
+#include "signals.h"
 #include "state.h"
 
 
@@ -155,6 +156,14 @@ keeper_pg_init_and_register(Keeper *keeper)
 		return keeper_init_fsm(keeper);
 	}
 
+	char scrubbedConnectionString[MAXCONNINFO] = { 0 };
+	if (!parse_and_scrub_connection_string(config->monitor_pguri,
+										   scrubbedConnectionString))
+	{
+		log_error("Failed to parse the monitor connection string");
+		return false;
+	}
+
 	/*
 	 * If the local Postgres instance does not exist, we have two possible
 	 * choices: either we're the only one in our group, or we are joining a
@@ -177,7 +186,7 @@ keeper_pg_init_and_register(Keeper *keeper)
 					  "to the pg_auto_failover monitor at %s, "
 					  "see above for details",
 					  config->hostname, config->pgSetup.pgport,
-					  config->pgSetup.pgdata, config->monitor_pguri);
+					  config->pgSetup.pgdata, scrubbedConnectionString);
 			return false;
 		}
 
@@ -247,7 +256,7 @@ keeper_pg_init_and_register(Keeper *keeper)
 					  "to the pg_auto_failover monitor at %s, "
 					  "see above for details",
 					  config->hostname, config->pgSetup.pgport,
-					  config->pgSetup.pgdata, config->monitor_pguri);
+					  config->pgSetup.pgdata, scrubbedConnectionString);
 			return false;
 		}
 
@@ -278,6 +287,13 @@ keeper_pg_init_and_register_primary(Keeper *keeper)
 	KeeperConfig *config = &(keeper->config);
 	PostgresSetup *pgSetup = &(config->pgSetup);
 	char absolutePgdata[PATH_MAX];
+	char scrubbedConnectionString[MAXCONNINFO] = { 0 };
+	if (!parse_and_scrub_connection_string(config->monitor_pguri,
+										   scrubbedConnectionString))
+	{
+		log_error("Failed to parse the monitor connection string");
+		return false;
+	}
 
 	log_info("A postgres directory already exists at \"%s\", registering "
 			 "as a single node",
@@ -291,7 +307,7 @@ keeper_pg_init_and_register_primary(Keeper *keeper)
 				  "to the pg_auto_failover monitor at %s, "
 				  "see above for details",
 				  config->hostname, config->pgSetup.pgport,
-				  config->pgSetup.pgdata, config->monitor_pguri);
+				  config->pgSetup.pgdata, scrubbedConnectionString);
 	}
 
 	log_info("Successfully registered as \"%s\" to the monitor.",
@@ -495,6 +511,12 @@ reach_initial_state(Keeper *keeper)
 			break;
 		}
 
+		case REPORT_LSN_STATE:
+		{
+			/* all the work is done in the INIT ➜ REPORT_LSN transition */
+			break;
+		}
+
 		default:
 
 			/* we don't support any other state at initialization time */
@@ -670,6 +692,11 @@ wait_until_primary_has_created_our_replication_slot(Keeper *keeper,
 	}
 
 	do {
+		if (asked_to_stop || asked_to_stop_fast || asked_to_quit)
+		{
+			return false;
+		}
+
 		if (firstLoop)
 		{
 			firstLoop = false;
