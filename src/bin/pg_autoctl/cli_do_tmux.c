@@ -212,6 +212,7 @@ cli_do_tmux_script_getopts(int argc, char **argv)
 		{ "sync-standbys", required_argument, NULL, 's' },
 		{ "skip-pg-hba", required_argument, NULL, 'S' },
 		{ "layout", required_argument, NULL, 'l' },
+		{ "binpath", required_argument, NULL, 'b' },
 		{ "version", no_argument, NULL, 'V' },
 		{ "verbose", no_argument, NULL, 'v' },
 		{ "quiet", no_argument, NULL, 'q' },
@@ -229,6 +230,7 @@ cli_do_tmux_script_getopts(int argc, char **argv)
 	options.skipHBA = false;
 	strlcpy(options.root, "/tmp/pgaf/tmux", sizeof(options.root));
 	strlcpy(options.layout, "even-vertical", sizeof(options.layout));
+	strlcpy(options.binpath, pg_autoctl_argv0, sizeof(options.binpath));
 
 	if (!parseCandidatePriorities("", options.priorities))
 	{
@@ -345,6 +347,13 @@ cli_do_tmux_script_getopts(int argc, char **argv)
 				break;
 			}
 
+			case 'b':
+			{
+				strlcpy(options.binpath, optarg, MAXPGPATH);
+				log_trace("--binpath %s", options.binpath);
+				break;
+			}
+
 			case 'h':
 			{
 				commandline_help(stderr);
@@ -405,6 +414,7 @@ cli_do_tmux_script_getopts(int argc, char **argv)
 		/* errors have already been logged */
 		exit(EXIT_CODE_BAD_ARGS);
 	}
+
 
 	if (errors > 0)
 	{
@@ -544,6 +554,7 @@ tmux_prepare_XDG_environment(const char *root, bool createDirectories)
 			if (pg_mkdir_p(env, 0700) == -1)
 			{
 				log_error("mkdir -p \"%s\": %m", env);
+				free(env);
 				return false;
 			}
 		}
@@ -551,6 +562,7 @@ tmux_prepare_XDG_environment(const char *root, bool createDirectories)
 		if (!normalize_filename(env, env, MAXPGPATH))
 		{
 			/* errors have already been logged */
+			free(env);
 			return false;
 		}
 
@@ -578,9 +590,13 @@ tmux_prepare_XDG_environment(const char *root, bool createDirectories)
 			if (pg_mkdir_p(targetPath, 0700) == -1)
 			{
 				log_error("mkdir -p \"%s\": %m", targetPath);
+
+				free(env);
 				return false;
 			}
 		}
+
+		free(env);
 	}
 
 	return true;
@@ -622,6 +638,7 @@ tmux_add_new_session(PQExpBuffer script, const char *root, int pgport)
 void
 tmux_pg_autoctl_create_monitor(PQExpBuffer script,
 							   const char *root,
+							   const char *binpath,
 							   int pgport,
 							   bool skipHBA)
 {
@@ -637,7 +654,7 @@ tmux_pg_autoctl_create_monitor(PQExpBuffer script,
 
 	tmux_add_send_keys_command(script,
 							   "%s create monitor %s --run",
-							   pg_autoctl_argv0,
+							   binpath,
 							   pg_ctl_opts);
 }
 
@@ -649,6 +666,7 @@ tmux_pg_autoctl_create_monitor(PQExpBuffer script,
 void
 tmux_pg_autoctl_create_postgres(PQExpBuffer script,
 								const char *root,
+								const char *binpath,
 								int pgport,
 								const char *name,
 								bool replicationQuorum,
@@ -665,7 +683,7 @@ tmux_pg_autoctl_create_postgres(PQExpBuffer script,
 
 	sformat(monitor, sizeof(monitor),
 			"$(%s show uri --pgdata %s/monitor --formation monitor)",
-			pg_autoctl_argv0,
+			binpath,
 			root);
 
 	tmux_add_send_keys_command(script,
@@ -681,7 +699,7 @@ tmux_pg_autoctl_create_postgres(PQExpBuffer script,
 							   "--replication-quorum %s "
 							   "--candidate-priority %d "
 							   "--run",
-							   pg_autoctl_argv0,
+							   binpath,
 							   pg_ctl_opts,
 							   monitor,
 							   name,
@@ -712,7 +730,8 @@ prepare_tmux_script(TmuxOptions *options, PQExpBuffer script)
 
 	/* start a monitor */
 	(void) tmux_add_xdg_environment(script);
-	tmux_pg_autoctl_create_monitor(script, root, pgport++, options->skipHBA);
+	tmux_pg_autoctl_create_monitor(script, root, options->binpath, pgport++,
+								   options->skipHBA);
 
 	/* start the Postgres nodes, using the monitor URI */
 	sformat(previousName, sizeof(previousName), "monitor");
@@ -733,12 +752,13 @@ prepare_tmux_script(TmuxOptions *options, PQExpBuffer script)
 		tmux_add_send_keys_command(script,
 								   "PG_AUTOCTL_DEBUG=1 "
 								   "%s do tmux wait --root %s %s",
-								   pg_autoctl_argv0,
+								   options->binpath,
 								   options->root,
 								   previousName);
 
 		tmux_pg_autoctl_create_postgres(script,
 										root,
+										options->binpath,
 										node->pgport,
 										node->name,
 										node->replicationQuorum,
@@ -757,12 +777,12 @@ prepare_tmux_script(TmuxOptions *options, PQExpBuffer script)
 	tmux_add_send_keys_command(script,
 							   "PG_AUTOCTL_DEBUG=1 "
 							   "%s do tmux wait --root %s %s",
-							   pg_autoctl_argv0,
+							   options->binpath,
 							   options->root,
 							   "monitor");
 	tmux_add_send_keys_command(script,
 							   "watch -n 0.2 %s show state",
-							   pg_autoctl_argv0);
+							   options->binpath);
 
 	/* add a window for interactive pg_autoctl commands */
 	tmux_add_command(script, "split-window -v");
@@ -785,7 +805,7 @@ prepare_tmux_script(TmuxOptions *options, PQExpBuffer script)
 		tmux_add_send_keys_command(script,
 								   "PG_AUTOCTL_DEBUG=1 "
 								   "%s do tmux wait --root %s %s %s",
-								   pg_autoctl_argv0,
+								   options->binpath,
 								   options->root,
 								   firstNode,
 								   NodeStateToString(targetPrimaryState));
@@ -793,7 +813,7 @@ prepare_tmux_script(TmuxOptions *options, PQExpBuffer script)
 		/* PGDATA has just been exported, rely on it */
 		tmux_add_send_keys_command(script,
 								   "%s set formation number-sync-standbys %d",
-								   pg_autoctl_argv0,
+								   options->binpath,
 								   options->numSync);
 	}
 
@@ -880,6 +900,7 @@ tmux_start_server(const char *scriptName)
 	(void) execute_subprogram(&program);
 
 	/* we only get there when the tmux session is done */
+	free_program(&program);
 	return true;
 }
 
@@ -921,6 +942,8 @@ tmux_attach_session(const char *tmux_path, const char *sessionName)
 	(void) execute_subprogram(&program);
 
 	/* we only get there when the tmux session is done */
+	free_program(&program);
+
 	return true;
 }
 
@@ -1463,6 +1486,7 @@ cli_do_tmux_wait(int argc, char **argv)
 			(void) snprintf_program_command_line(&program, command, BUFSIZE);
 
 			log_error("%s [%d]", command, program.returnCode);
+			free_program(&program);
 			exit(EXIT_CODE_INTERNAL_ERROR);
 		}
 
@@ -1487,7 +1511,11 @@ cli_do_tmux_wait(int argc, char **argv)
 			{
 				log_info("The monitor is ready at: %s", showUri.stdOut);
 			}
+
+			free_program(&showUri);
 		}
+
+		free_program(&program);
 
 		if (!ready)
 		{
