@@ -855,7 +855,7 @@ prepare_tmux_script(TmuxOptions *options, PQExpBuffer script)
  * tmux_start_server starts a tmux session with the given script.
  */
 bool
-tmux_start_server(const char *scriptName)
+tmux_start_server(const char *scriptName, const char *binpath)
 {
 	char *args[8];
 	int argsIndex = 0;
@@ -866,6 +866,12 @@ tmux_start_server(const char *scriptName)
 	if (setenv("PG_AUTOCTL_DEBUG", "1", 1) != 0)
 	{
 		log_error("Failed to set environment PG_AUTOCTL_DEBUG: %m");
+		return false;
+	}
+
+	if (binpath && setenv("PG_AUTOCTL_DEBUG_BIN_PATH", binpath, 1) != 0)
+	{
+		log_error("Failed to set environment PG_AUTOCTL_DEBUG_BIN_PATH: %m");
 		return false;
 	}
 
@@ -888,7 +894,9 @@ tmux_start_server(const char *scriptName)
 	args[argsIndex] = NULL;
 
 	/* we do not want to call setsid() when running this program. */
-	Program program = initialize_program(args, false);
+	Program program = { 0 };
+
+	(void) initialize_program(&program, args, false);
 
 	program.capture = false;    /* don't capture output */
 	program.tty = true;         /* allow sharing the parent's tty */
@@ -912,7 +920,7 @@ tmux_start_server(const char *scriptName)
 bool
 tmux_attach_session(const char *tmux_path, const char *sessionName)
 {
-	Program program;
+	Program program = { 0 };
 
 	char *args[8];
 	int argsIndex = 0;
@@ -930,7 +938,7 @@ tmux_attach_session(const char *tmux_path, const char *sessionName)
 	args[argsIndex] = NULL;
 
 	/* we do not want to call setsid() when running this program. */
-	program = initialize_program(args, false);
+	(void) initialize_program(&program, args, false);
 
 	program.capture = false;    /* don't capture output */
 	program.tty = true;         /* allow sharing the parent's tty */
@@ -1358,7 +1366,7 @@ cli_do_tmux_session(int argc, char **argv)
 	/*
 	 * Start a tmux session from the script.
 	 */
-	if (!tmux_start_server(scriptName))
+	if (!tmux_start_server(scriptName, options.binpath))
 	{
 		success = false;
 		log_fatal("Failed to start the tmux session, see above for details");
