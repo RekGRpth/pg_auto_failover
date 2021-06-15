@@ -44,6 +44,7 @@ def test_002_add_standby():
     node2.run()
 
     assert node2.wait_until_state(target_state="secondary")
+    assert node1.wait_until_state(target_state="primary")
 
     assert node1.has_needed_replication_slots()
     assert node2.has_needed_replication_slots()
@@ -95,7 +96,7 @@ def test_005_set_candidate_priorities():
     assert node1.wait_until_state(target_state="primary")
 
     # set priorities in a way that we know the candidate: node3
-    node1.set_candidate_priority(90)  # current primary
+    node1.set_candidate_priority(80)  # current primary
     node2.set_candidate_priority(70)  # remain secondary
     node3.set_candidate_priority(90)  # favorite for failover
 

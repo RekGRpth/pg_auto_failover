@@ -1337,7 +1337,7 @@ keeper_cli_print_version(int argc, char **argv)
 				"pg_autoctl extension version %s\n",
 				PG_AUTOCTL_EXTENSION_VERSION);
 		fformat(stdout, "compiled with %s\n", PG_VERSION_STR);
-		fformat(stdout, "compatible with Postgres 10, 11, 12, and 13\n");
+		fformat(stdout, "compatible with Postgres 10, 11, 12, 13, and 14\n");
 	}
 
 	exit(0);
@@ -2109,7 +2109,8 @@ cli_use_monitor_option(KeeperConfig *options)
 	if (env_exists(PG_AUTOCTL_MONITOR) &&
 		get_env_copy(PG_AUTOCTL_MONITOR,
 					 options->monitor_pguri,
-					 sizeof(options->monitor_pguri)))
+					 sizeof(options->monitor_pguri)) &&
+		!IS_EMPTY_STRING_BUFFER(options->monitor_pguri))
 	{
 		log_debug("Using environment PG_AUTOCTL_MONITOR \"%s\"",
 				  options->monitor_pguri);
