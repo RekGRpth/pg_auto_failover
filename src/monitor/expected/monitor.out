@@ -123,9 +123,10 @@ opt_secondary        | t
 number_sync_standbys | 1
 
 -- dump the pgautofailover.node table, omitting the timely columns
-select formationid, nodeid, groupid, nodehost, nodeport,
-       goalstate, reportedstate, reportedpgisrunning, reportedrepstate
-  from pgautofailover.node;
+  select formationid, nodeid, groupid, nodehost, nodeport,
+         goalstate, reportedstate, reportedpgisrunning, reportedrepstate
+    from pgautofailover.node
+order by nodeid;
 -[ RECORD 1 ]-------+-------------
 formationid         | default
 nodeid              | 1
@@ -204,21 +205,16 @@ dbname               | postgres
 opt_secondary        | t
 number_sync_standbys | 0
 
+select pgautofailover.remove_node(1, force => 'true');
+-[ RECORD 1 ]--
+remove_node | t
+
 -- dump the pgautofailover.node table, omitting the timely columns
-select formationid, nodeid, groupid, nodehost, nodeport,
-       goalstate, reportedstate, reportedpgisrunning, reportedrepstate
-  from pgautofailover.node;
+  select formationid, nodeid, groupid, nodehost, nodeport,
+         goalstate, reportedstate, reportedpgisrunning, reportedrepstate
+    from pgautofailover.node
+order by nodeid;
 -[ RECORD 1 ]-------+-------------
-formationid         | default
-nodeid              | 3
-groupid             | 0
-nodehost            | localhost
-nodeport            | 9879
-goalstate           | report_lsn
-reportedstate       | init
-reportedpgisrunning | t
-reportedrepstate    | async
--[ RECORD 2 ]-------+-------------
 formationid         | default
 nodeid              | 2
 groupid             | 0
@@ -228,6 +224,16 @@ goalstate           | report_lsn
 reportedstate       | wait_standby
 reportedpgisrunning | t
 reportedrepstate    | unknown
+-[ RECORD 2 ]-------+-------------
+formationid         | default
+nodeid              | 3
+groupid             | 0
+nodehost            | localhost
+nodeport            | 9879
+goalstate           | report_lsn
+reportedstate       | init
+reportedpgisrunning | t
+reportedrepstate    | async
 
 select *
   from pgautofailover.set_node_system_identifier(2, 6852685710417058800);

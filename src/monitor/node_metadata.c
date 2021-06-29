@@ -69,7 +69,8 @@ AllAutoFailoverNodes(char *formationId)
 	uint64 rowNumber = 0;
 
 	const char *selectQuery =
-		SELECT_ALL_FROM_AUTO_FAILOVER_NODE_TABLE " WHERE formationid = $1";
+		SELECT_ALL_FROM_AUTO_FAILOVER_NODE_TABLE
+		" WHERE formationid = $1 ";
 
 	SPI_connect();
 
@@ -148,6 +149,8 @@ TupleToAutoFailoverNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	Datum stateChangeTime = heap_getattr(heapTuple,
 										 Anum_pgautofailover_node_statechangetime,
 										 tupleDescriptor, &isNull);
+	Datum reportedTLI = heap_getattr(heapTuple, Anum_pgautofailover_node_reportedTLI,
+									 tupleDescriptor, &isNull);
 	Datum reportedLSN = heap_getattr(heapTuple, Anum_pgautofailover_node_reportedLSN,
 									 tupleDescriptor, &isNull);
 	Datum candidatePriority = heap_getattr(heapTuple,
@@ -185,6 +188,7 @@ TupleToAutoFailoverNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	pgAutoFailoverNode->health = DatumGetInt32(health);
 	pgAutoFailoverNode->healthCheckTime = DatumGetTimestampTz(healthCheckTime);
 	pgAutoFailoverNode->stateChangeTime = DatumGetTimestampTz(stateChangeTime);
+	pgAutoFailoverNode->reportedTLI = DatumGetInt32(reportedTLI);
 	pgAutoFailoverNode->reportedLSN = DatumGetLSN(reportedLSN);
 	pgAutoFailoverNode->candidatePriority = DatumGetInt32(candidatePriority);
 	pgAutoFailoverNode->replicationQuorum = DatumGetBool(replicationQuorum);
@@ -218,7 +222,63 @@ AutoFailoverNodeGroup(char *formationId, int groupId)
 
 	const char *selectQuery =
 		SELECT_ALL_FROM_AUTO_FAILOVER_NODE_TABLE
-		" WHERE formationid = $1 AND groupid = $2"
+		"    WHERE formationid = $1 AND groupid = $2"
+		"      AND goalstate <> 'dropped'"
+		" ORDER BY nodeid";
+
+	SPI_connect();
+
+	int spiStatus = SPI_execute_with_args(selectQuery, argCount, argTypes, argValues,
+										  NULL, false, 0);
+	if (spiStatus != SPI_OK_SELECT)
+	{
+		elog(ERROR, "could not select from " AUTO_FAILOVER_NODE_TABLE);
+	}
+
+	MemoryContext spiContext = MemoryContextSwitchTo(callerContext);
+
+	for (rowNumber = 0; rowNumber < SPI_processed; rowNumber++)
+	{
+		HeapTuple heapTuple = SPI_tuptable->vals[rowNumber];
+		AutoFailoverNode *pgAutoFailoverNode =
+			TupleToAutoFailoverNode(SPI_tuptable->tupdesc, heapTuple);
+
+		nodeList = lappend(nodeList, pgAutoFailoverNode);
+	}
+
+	MemoryContextSwitchTo(spiContext);
+
+	SPI_finish();
+
+	return nodeList;
+}
+
+
+/*
+ * AutoFailoverAllNodesInGroup returns all nodes in the given formation and
+ * group as a list, and includes nodes that are currently being dropped.
+ */
+List *
+AutoFailoverAllNodesInGroup(char *formationId, int groupId)
+{
+	List *nodeList = NIL;
+	MemoryContext callerContext = CurrentMemoryContext;
+
+	Oid argTypes[] = {
+		TEXTOID, /* formationid */
+		INT4OID  /* groupid */
+	};
+
+	Datum argValues[] = {
+		CStringGetTextDatum(formationId), /* formationid */
+		Int32GetDatum(groupId)            /* groupid */
+	};
+	const int argCount = sizeof(argValues) / sizeof(argValues[0]);
+	uint64 rowNumber = 0;
+
+	const char *selectQuery =
+		SELECT_ALL_FROM_AUTO_FAILOVER_NODE_TABLE
+		"    WHERE formationid = $1 AND groupid = $2"
 		" ORDER BY nodeid";
 
 	SPI_connect();
@@ -675,12 +735,16 @@ pgautofailover_node_reportedlsn_compare(const void *a, const void *b)
 	AutoFailoverNode *node2 = (AutoFailoverNode *) lfirst(*(ListCell **) b);
 #endif
 
-	if (node1->reportedLSN > node2->reportedLSN)
+	if (node1->reportedTLI > node2->reportedTLI ||
+		(node1->reportedTLI == node2->reportedTLI &&
+		 node1->reportedLSN > node2->reportedLSN))
 	{
 		return -1;
 	}
 
-	if (node1->reportedLSN < node2->reportedLSN)
+	if (node1->reportedTLI < node2->reportedTLI ||
+		(node1->reportedTLI == node2->reportedTLI &&
+		 node1->reportedLSN < node2->reportedLSN))
 	{
 		return 1;
 	}
@@ -1184,6 +1248,7 @@ void
 ReportAutoFailoverNodeState(char *nodeHost, int nodePort,
 							ReplicationState reportedState,
 							bool pgIsRunning, SyncState pgSyncState,
+							int reportedTLI,
 							XLogRecPtr reportedLSN)
 {
 	Oid reportedStateOid = ReplicationStateGetEnum(reportedState);
@@ -1193,6 +1258,7 @@ ReportAutoFailoverNodeState(char *nodeHost, int nodePort,
 		replicationStateTypeOid, /* reportedstate */
 		BOOLOID,                 /* pg_ctl status: is running */
 		TEXTOID,                 /* pg_stat_replication.sync_state */
+		INT4OID,                 /* reportedtli */
 		LSNOID,                  /* reportedlsn */
 		TEXTOID,                 /* nodehost */
 		INT4OID                  /* nodeport */
@@ -1202,6 +1268,7 @@ ReportAutoFailoverNodeState(char *nodeHost, int nodePort,
 		ObjectIdGetDatum(reportedStateOid),   /* reportedstate */
 		BoolGetDatum(pgIsRunning),            /* pg_ctl status: is running */
 		CStringGetTextDatum(SyncStateToString(pgSyncState)), /* sync_state */
+		Int32GetDatum(reportedTLI),                          /* reportedtli */
 		LSNGetDatum(reportedLSN),             /* reportedlsn */
 		CStringGetTextDatum(nodeHost),        /* nodehost */
 		Int32GetDatum(nodePort)               /* nodeport */
@@ -1212,10 +1279,11 @@ ReportAutoFailoverNodeState(char *nodeHost, int nodePort,
 		"UPDATE " AUTO_FAILOVER_NODE_TABLE
 		" SET reportedstate = $1, reporttime = now(), "
 		"reportedpgisrunning = $2, reportedrepstate = $3, "
-		"reportedlsn = CASE $4 WHEN '0/0'::pg_lsn THEN reportedlsn ELSE $4 END, "
-		"walreporttime = CASE $4 WHEN '0/0'::pg_lsn THEN walreporttime ELSE now() END, "
+		"reportedtli = CASE $4 WHEN 0 THEN reportedtli ELSE $4 END, "
+		"reportedlsn = CASE $5 WHEN '0/0'::pg_lsn THEN reportedlsn ELSE $5 END, "
+		"walreporttime = CASE $5 WHEN '0/0'::pg_lsn THEN walreporttime ELSE now() END, "
 		"statechangetime = CASE WHEN reportedstate <> $1 THEN now() ELSE statechangetime END "
-		"WHERE nodehost = $5 AND nodeport = $6";
+		"WHERE nodehost = $6 AND nodeport = $7";
 
 	SPI_connect();
 

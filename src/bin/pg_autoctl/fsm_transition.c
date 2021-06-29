@@ -232,7 +232,7 @@ fsm_init_primary(Keeper *keeper)
 		return false;
 	}
 
-	if (!postgres_add_default_settings(postgres))
+	if (!postgres_add_default_settings(postgres, config->hostname))
 	{
 		log_error("Failed to initialize postgres as primary because "
 				  "adding default settings failed, see above for details");
@@ -859,7 +859,7 @@ fsm_init_standby_from_upstream(Keeper *keeper)
 
 	if (!standby_init_database(postgres, config->hostname, skipBaseBackup))
 	{
-		log_error("Failed initialize standby server, see above for details");
+		log_error("Failed to initialize standby server, see above for details");
 		return false;
 	}
 
@@ -1457,4 +1457,16 @@ fsm_init_from_standby(Keeper *keeper)
 	}
 
 	return fsm_init_standby_from_upstream(keeper);
+}
+
+
+/*
+ * fsm_drop_node is called to finish dropping a node on the client side.
+ *
+ * Nothing to do here, really.
+ */
+bool
+fsm_drop_node(Keeper *keeper)
+{
+	return true;
 }

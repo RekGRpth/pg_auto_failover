@@ -107,7 +107,7 @@ bool monitor_register_node(Monitor *monitor,
 bool monitor_node_active(Monitor *monitor,
 						 char *formation, int64_t nodeId,
 						 int groupId, NodeState currentState,
-						 bool pgIsRunning,
+						 bool pgIsRunning, int currentTLI,
 						 char *currentLSN, char *pgsrSyncState,
 						 MonitorAssignedState *assignedState);
 bool monitor_get_node_replication_settings(Monitor *monitor,
@@ -123,8 +123,9 @@ bool monitor_get_formation_number_sync_standbys(Monitor *monitor, char *formatio
 bool monitor_set_formation_number_sync_standbys(Monitor *monitor, char *formation,
 												int numberSyncStandbys);
 
-bool monitor_remove_by_hostname(Monitor *monitor, char *host, int port);
-bool monitor_remove_by_nodename(Monitor *monitor, char *formation, char *name);
+bool monitor_remove_by_hostname(Monitor *monitor, char *host, int port, bool force);
+bool monitor_remove_by_nodename(Monitor *monitor,
+								char *formation, char *name, bool force);
 
 bool monitor_count_groups(Monitor *monitor, char *formation, int *groupsCount);
 bool monitor_get_groupId_from_name(Monitor *monitor,
@@ -219,5 +220,10 @@ bool monitor_ensure_extension_version(Monitor *monitor,
 									  LocalPostgresServer *postgres,
 									  MonitorExtensionVersion *version);
 
+bool monitor_find_node_by_nodeid(Monitor *monitor,
+								 const char *formation,
+								 int groupId,
+								 int64_t nodeId,
+								 NodeAddressArray *nodesArray);
 
 #endif /* MONITOR_H */

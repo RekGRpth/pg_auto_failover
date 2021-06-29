@@ -564,7 +564,7 @@ cli_do_monitor_node_active(int argc, char **argv)
 	 * as in the main loop: we continue with default WAL lag of -1 and an empty
 	 * string for pgsrSyncState.
 	 */
-	(void) keeper_update_pg_state(&keeper);
+	(void) keeper_update_pg_state(&keeper, LOG_WARN);
 
 	if (!monitor_node_active(&keeper.monitor,
 							 config.formation,
@@ -572,6 +572,7 @@ cli_do_monitor_node_active(int argc, char **argv)
 							 keeper.state.current_group,
 							 keeper.state.current_role,
 							 keeper.postgres.pgIsRunning,
+							 keeper.postgres.postgresSetup.control.timeline_id,
 							 keeper.postgres.currentLSN,
 							 keeper.postgres.pgsrSyncState,
 							 &assignedState))

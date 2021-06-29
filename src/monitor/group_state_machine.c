@@ -108,6 +108,33 @@ ProceedGroupState(AutoFailoverNode *activeNode)
 						activeNode->formationId)));
 	}
 
+	/*
+	 * If the active node just reached the DROPPED state, proceed to remove it
+	 * from the pgautofailover.node table.
+	 */
+	if (IsCurrentState(activeNode, REPLICATION_STATE_DROPPED))
+	{
+		char message[BUFSIZE] = { 0 };
+
+		/* time to actually remove the current node */
+		RemoveAutoFailoverNode(activeNode);
+
+		LogAndNotifyMessage(
+			message, BUFSIZE,
+			"Removing " NODE_FORMAT " from formation \"%s\" and group %d",
+			NODE_FORMAT_ARGS(activeNode),
+			activeNode->formationId,
+			activeNode->groupId);
+
+		return true;
+	}
+
+	/* node reports secondary/dropped */
+	if (activeNode->goalState == REPLICATION_STATE_DROPPED)
+	{
+		return true;
+	}
+
 	/* when there's no other node anymore, not even one */
 	if (nodesCount == 1 &&
 		!IsCurrentState(activeNode, REPLICATION_STATE_SINGLE))
@@ -338,6 +365,7 @@ ProceedGroupState(AutoFailoverNode *activeNode)
 		 IsCurrentState(primaryNode, REPLICATION_STATE_JOIN_PRIMARY) ||
 		 IsCurrentState(primaryNode, REPLICATION_STATE_PRIMARY)) &&
 		IsHealthy(activeNode) &&
+		activeNode->reportedTLI == primaryNode->reportedTLI &&
 		WalDifferenceWithin(activeNode, primaryNode, EnableSyncXlogThreshold))
 	{
 		char message[BUFSIZE] = { 0 };
@@ -1878,7 +1906,9 @@ AssignGoalState(AutoFailoverNode *pgAutoFailoverNode,
 /*
  * WalDifferenceWithin returns whether the most recently reported relative log
  * position of the given nodes is within the specified bound. Returns false if
- * neither node has reported a relative xlog position
+ * neither node has reported a relative xlog position.
+ *
+ * Returns false when the nodes are not on the same reported timeline.
  */
 static bool
 WalDifferenceWithin(AutoFailoverNode *secondaryNode,
