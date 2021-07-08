@@ -599,14 +599,15 @@ CREATE FUNCTION pgautofailover.current_state
    OUT replication_quorum	bool,
    OUT reported_tli         int,
    OUT reported_lsn         pg_lsn,
-   OUT health               integer
+   OUT health               integer,
+   OUT nodecluster          text
  )
 RETURNS SETOF record LANGUAGE SQL STRICT
 AS $$
    select kind, nodename, nodehost, nodeport, groupid, nodeid,
           reportedstate, goalstate,
    		  candidatepriority, replicationquorum,
-          reportedtli, reportedlsn, health
+          reportedtli, reportedlsn, health, nodecluster
      from pgautofailover.node
      join pgautofailover.formation using(formationid)
     where formationid = formation_id
@@ -615,6 +616,9 @@ $$;
 
 comment on function pgautofailover.current_state(text)
         is 'get the current state of both nodes of a formation';
+
+grant execute on function pgautofailover.current_state(text)
+   to autoctl_node;
 
 CREATE FUNCTION pgautofailover.current_state
  (
@@ -632,14 +636,15 @@ CREATE FUNCTION pgautofailover.current_state
    OUT replication_quorum	bool,
    OUT reported_tli         int,
    OUT reported_lsn         pg_lsn,
-   OUT health               integer
+   OUT health               integer,
+   OUT nodecluster          text
  )
 RETURNS SETOF record LANGUAGE SQL STRICT
 AS $$
    select kind, nodename, nodehost, nodeport, groupid, nodeid,
           reportedstate, goalstate,
    		  candidatepriority, replicationquorum,
-          reportedtli, reportedlsn, health
+          reportedtli, reportedlsn, health, nodecluster
      from pgautofailover.node
      join pgautofailover.formation using(formationid)
     where formationid = formation_id
@@ -649,6 +654,9 @@ $$;
 
 comment on function pgautofailover.current_state(text, int)
         is 'get the current state of both nodes of a group in a formation';
+
+grant execute on function pgautofailover.current_state(text, int)
+   to autoctl_node;
 
 
 CREATE FUNCTION pgautofailover.formation_uri
@@ -728,7 +736,8 @@ begin
 		  into nodeid, reportedstate
 		  from pgautofailover.node
 		 where node.formationid = new.formationid
-		   and node.reportedstate <> 'single';
+		   and node.reportedstate <> 'single'
+           and node.goalstate <> 'dropped';
 
 		if nodeid is not null
 		then
